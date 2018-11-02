@@ -1,6 +1,8 @@
-# Sample codes for numerical analysis
+## Sample codes for numerical analysis
 # Solving classical physics equation in d dimension using various numerical methods and programming languages / packages
 # UNDER CONSTRUCTION
+
+# Partial Differential Equations (PDE)
 
 Numerical methods for PDEs:
 * Finite Differences Method (fd)
