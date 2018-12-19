@@ -21,7 +21,6 @@ function sol = poisson1fd(L,N,f,BCtype0,BCval0,BCtype1,BCval1)
 % Implement Neumann BC with directional derivatives: change signs of NEU1
 % BC RHS and BC in solution
 % Implement solver for tridiagonal matrices
-% Implement error message for bad BC string 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %DISCRETIZATION %
@@ -48,7 +47,7 @@ elseif(strcmp(BCtype0,'NEU2'))%Neumann Boundary Conditions at x0, 2nd degree ope
     El = [c ; El];% Add matrix lower extradiagonal term for x1
     f(1) = f(1) + 2*c * h * BCval0;%Add right-hand side BC term for xN
 else %Error in the Boundary condition type
-    %
+    error('Wrong Boundary Condition specified at x0');
 end
 % BOUNDARY CONDITIONS AT xN+1 %
 if(strcmp(BCtype1,'DIR'))%Dirichlet Boundary Conditions at xN+1
@@ -67,7 +66,7 @@ elseif(strcmp(BCtype1,'NEU2'))%Neumann Boundary Conditions at xN+1, 2nd degree o
     Eu = [Eu ; c];% Add matrix upper extradiagonal term for xN
     f(end) = f(end) - 2*c * h * BCval1;%Add right-hand side BC term for xN
 else %Error in the Boundary condition type
-    %
+    error('Wrong Boundary Condition specified at xN+1');
 end
 
 %ASSEMBLE AND SOLVE THE SYSTEM %
