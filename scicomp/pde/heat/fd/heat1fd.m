@@ -1,7 +1,7 @@
 function [] = heat1fd()
-%Resolution of Heat equation in 1D using finite-differences
+% Resolution of Heat equation in 1D using finite-differences
 % Heat equation: \rho c_p \frac {\partial T}{\partial t} - \nabla \cdot \left(k\nabla T\right)=q
-% Heat equation 1D : \rho c_p \frac{dT}{dt} - \frac{dk}{dx} \frac{dT}{dx} - k \frac{d^2k}{dx^2} = q
+% Heat equation 1D : \rho c_p \frac{dT}{dt} - \frac{dk}{dx} \frac{dT}{dx} - k \frac{d^2T}{dx^2} = q
 % Discretized heat equation 1D
 
 %Create functions for heat source and BC/initial shapes (ramp, wiggle,
@@ -10,7 +10,7 @@ function [] = heat1fd()
 
 clear;
 L = [0 1];%Size of the domain
-n = 102;%Number total discretization points, including boundary points
+n = 102;%Number of total discretization points, including boundary points
 ni = n-2;%Number of interior discretization points, excluding boundary points
 dt = 1e-3;%timestep of the numerical method
 time_int = 'implicit';% Time integration : 'explicit' or 'implicit'
@@ -35,27 +35,27 @@ D = -2*cx/ct;%Diagonal term of the stiffness matrix
 E = 1*cx/ct;%Extradiagonal term of the stiffness matrix
 K = diag(D*ones(ni,1)) + diag(E*ones(ni-1,1),1) + diag(E*ones(ni-1,1),-1);%Assembled stiffness matrix
 
-%add boundary conditions contribution to source terms in the second member b
-b = q;
-b(1,:) = (b(1,:) + BC0*cx)/ct;
-b(ni,:) = (b(ni,:) + BC1*cx)/ct;
+%add boundary conditions contribution to source terms in the right hand side Q
+Q = q/ct;
+Q(1,:) = Q(1,:) + BC0*cx/ct;
+Q(ni,:) = Q(ni,:) + BC1*cx/ct;
 
-%SOLVING THE SySTEM
+%SOLVING THE SYSTEM
 
 solution = zeros(n,nstep);%Saving intermediate solutions
 solution(1,:) = BC0;%Prescribed value on first node
 solution(end,:) = BC1;%Prescribed value on last node
 u_t = u_0;% Temperature field initialized with the initial conditions at time t
 for t=1:nstep
-    if(strcmp(time_int,'implicit'))% Implicit time integration: (1-K) u_tp1 = u_t + q/ct
-        u_tp1 = linsolve(eye(ni)-K,u_t+b(:,t));% Temperature field at time t+1
+    if(strcmp(time_int,'implicit'))% Implicit time integration: (1-K) u_tp1 = u_t + Q
+        u_tp1 = linsolve(eye(ni)-K,u_t+Q(:,t));% Temperature field at time t+1
         solution(2:end-1,t) = u_tp1;
         u_t = u_tp1;
-    elseif(strcmp(time_int,'explicit'))% Explicit time integration: u_tp1 = (1+K) U_t + q/ct
+    elseif(strcmp(time_int,'explicit'))% Explicit time integration: u_tp1 = (1+K) U_t + Q
         if(~CFL)
             disp('WARNING: CFL condition not met. Explicit scheme UNSTABLE');
         end
-        u_tp1 = (eye(ni) + K)*u_t + b(:,t);% Temperature field at time t+1
+        u_tp1 = (eye(ni) + K)*u_t + Q(:,t);% Temperature field at time t+1
         solution(2:end-1,t) = u_tp1;
         u_t = u_tp1;
     end
