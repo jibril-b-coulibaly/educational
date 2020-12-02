@@ -19,29 +19,29 @@ import scipy.integrate as integrate
 def BC_satexp(t, param):
     # Saturaed exponential: T(t) = T_{ini} + (T_{fin}-T_{ini})*(1-\exp(-t/\tau))
     # param = tau, Tini, Tfin
-    tau = param[0]
-    Tini = param[1]
-    Tfin = param[2]
+    tau = float(param[0])
+    Tini = float(param[1])
+    Tfin = float(param[2])
     return Tini + (Tfin - Tini)*(1.0 - np.exp(-t/tau))
 
 def BC_const(t, param):
     # Constant temperature: T(t) = T0
     # param = T0
-    T0 = param[0]
+    T0 = float(param[0])
     return T0
 
 def main():
     # Parameters
-    R = 1.0 # Radius, domain [0,R]
-    rho = 1.0 # Density, assumed constant over space
-    cp = 5.0 # Specific heat capacity, assumed constant over space
-    k = 1.0 # Thermal conductivity, assumed constant over space
+    R = 0.075 # Radius, domain [0,R]
+    rho = 1800.0 # Density, assumed constant over space
+    cp = 795.0 # Specific heat capacity, assumed constant over space
+    k = 0.33 # Thermal conductivity, assumed constant over space
     n = 102 # Number of total discretization points, including boundary points
     ni = n-2 # Number of interior discretization points, excluding boundary points
     r = np.linspace(0,R,n)
-    nstep = 300 # Number of timesteps
-    dt = 1e-2 # timestep of time integration
-    nsave = 100 # Number of times to save the data
+    nstep = 30000 # Number of timesteps
+    dt = 1 # timestep of time integration
+    nsave = 1000 # Number of times to save the data
     time = np.linspace(0,nstep*dt,nsave)
     scheme = 'implicit' # time-discretization scheme
 
@@ -68,7 +68,7 @@ def main():
     """
     BCtype = ['NEU','DIR'] # Type of Boundary conditions, Dirichlet 'DIR' or Neumann 'NEU' at [r=0, r=R]
     BCform = [None,BC_satexp] # Time-dependent Boundary Conditions functions wrappers at [r=0, r=R]. Only valid for Dirichlet
-    BCparams = [[None],[0.6, 0.0, 1.0]] # Parameters for the boundary condition function wrappers at [r=0, r=R]. Only valid for Dirichlet
+    BCparams = [[None],[600.0, 0.0, 10.0]] # Parameters for the boundary condition function wrappers at [r=0, r=R]. Only valid for Dirichlet
     
     # Time-dependent BC as contributions to flux vector Q
     Q_BC = np.zeros(ni)
@@ -89,10 +89,10 @@ def main():
             temp_save[t/nevery] = np.copy(temp)
         # Time-dependent Dirichlet Boundary conditions at r=0
         if (BCtype[0] == 'DIR'):
-            Q_BC[0] = DL[0]*BCform[0](t*dt,BCparams[0])
+            Q_BC[0] = DL[0]*BCform[0]((t+1)*dt,BCparams[0]) # Implicit: imposed temperture at time (t+1)
         # Time-dependent Dirichlet Boundary conditions at r=0
         if (BCtype[1] == 'DIR'):
-            Q_BC[-1] = DR[-1]*BCform[1](t*dt,BCparams[1])
+            Q_BC[-1] = DR[-1]*BCform[1]((t+1)*dt,BCparams[1]) # Implicit: imposed temperture at time (t+1)
         if (scheme == 'implicit'): #Implicit time integration: (1-K) T_tp1 = T_t + (Q+Q_BC)_tp1
             temp = LA.solve(np.identity(ni)-K,temp+Q+Q_BC)
         elif(scheme == 'explicit'): # Explicit time integration: T_tp1 = (1+K) T_t + (Q+Q_BC)_t
@@ -102,12 +102,12 @@ def main():
     # Compute average temperature, integral on disc
     temp_ave = np.zeros(nsave)
     for t in range(nsave):
-        temp_ave[t] = 2/R**2*integrate.simps(temp_save[t]*r[1:-1],r[1:-1])
+        temp_ave[t] = 2.0/r[-2]**2*integrate.simps(temp_save[t]*r[1:-1],r[1:-1])
     
     # Output
     fname = "heat_1D_axisymmetric.csv"
     header = ['time','temp_out','temp_ave']
-    data = np.concatenate((time[:,np.newaxis],BCform[1](time,BCparams[1])[:,np.newaxis],temp_ave[:,np.newaxis]),axis=1)
+    data = np.concatenate((time[:,np.newaxis],BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0]))[:,np.newaxis],temp_ave[:,np.newaxis]),axis=1)
     np.savetxt(fname, data, header=",".join(header), delimiter=',')
     
  
@@ -125,11 +125,15 @@ def main():
     ax.plot(r[1:-1],temp_save[nsave-1])
     
     fig, ax2 = plt.subplots()
-    ax2.plot(time,temp_save[:,0])
-    ax2.plot(time,temp_save[:,ni/2])
-    ax2.plot(time,temp_save[:,ni-1])
-    ax2.plot(time,temp_avg,'k--')
-    ax2.plot(time,BCform[1](time,BCparams[1]),'k')
+    #ax2.plot(time,temp_save[:,0])
+    #ax2.plot(time,temp_save[:,ni/2])
+    #ax2.plot(time,temp_save[:,ni-1])
+    ax2.plot(time/3600,BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0])),'k', label='outer temperature')
+    ax2.plot(time/3600,temp_ave,'k--',label='average temperature')
+    ax2.plot(time/3600,BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0])) - temp_ave,'r', label='temperature difference')
+    ax2.legend()
+    ax2.set_xlabel('time [h]')
+    ax2.set_ylabel('temperature [C]')
     """
 if __name__== "__main__":
   main()
