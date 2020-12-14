@@ -32,7 +32,7 @@ def BC_const(t, param):
 
 def main():
     # Parameters
-    R = 0.075 # Radius, domain [0,R]
+    R = 0.5*0.075 # Radius, domain [0,R]
     rho = 1800.0 # Density, assumed constant over space
     cp = 795.0 # Specific heat capacity, assumed constant over space
     k = 0.33 # Thermal conductivity, assumed constant over space
@@ -130,10 +130,30 @@ def main():
     #ax2.plot(time,temp_save[:,ni-1])
     ax2.plot(time/3600,BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0])),'k', label='outer temperature')
     ax2.plot(time/3600,temp_ave,'k--',label='average temperature')
+    ax2.plot(time/3600,BCparams[1][2]*(1.0 - np.exp(-time/(6*BCparams[1][0]))),'b--', label='exponential tau_ave = 6 tau')
     ax2.plot(time/3600,BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0])) - temp_ave,'r', label='temperature difference')
+    ax2.plot(time/3600,BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0])) - BCparams[1][2]*(1.0 - np.exp(-time/(6*BCparams[1][0]))),'b', label='simple model difference')
     ax2.legend()
     ax2.set_xlabel('time [h]')
     ax2.set_ylabel('temperature [C]')
+    
+    fig, ax3 = plt.subplots()
+    ax3.plot(time/3600,1e2*33*1e-6*BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0])),'k', label='steel ring')
+    ax3.plot(time/3600,1e2*2.6*1e-5*temp_ave,'k--',label='soil')
+    ax3.plot(time/3600,1e2*33*1e-6*BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0])) - 1e2*2.6*1e-5*temp_ave,'r', label='average differential')
+    ax3.plot(time/3600,1e2*(33*1e-6-2.6*1e-5)*BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0])),'b', label='ideal differential Tring=Tsoil')
+    ax3.legend()
+    ax3.set_xlabel('time [h]')
+    ax3.set_ylabel('volumetric expansion [%]')
+    
+    fig, ax4 = plt.subplots()
+    ax4.plot(time/3600,1e2*33*1e-6*np.ones(len(time)),'k', label='steel ring')
+    ax4.plot(time/3600,1e2*2.6*1e-5*np.ones(len(time)),'k--',label='Quartz (soil material)')
+    ax4.plot(time/3600,1e2*2.6*1e-5*temp_ave/(BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0]))),'r',label='average soil')
+    ax4.plot(time/3600,1e2*2.6*1e-5*BCparams[1][2]*(1.0 - np.exp(-time/(6*BCparams[1][0])))/(BCparams[1][2]*(1.0 - np.exp(-time/BCparams[1][0]))),'b', label='average model expo')
+    ax4.legend()
+    ax4.set_xlabel('time [h]')
+    ax4.set_ylabel('Thermal expansion coefficient [%/C]')
     """
 if __name__== "__main__":
   main()
