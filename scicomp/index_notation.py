@@ -7,7 +7,7 @@ Created on Mon Dec 14 16:16:47 2020
 
 import numpy as np
 
-# Computes the Jacobian in Voigt notatio of dE/dF, E=1/2(F^t * F - I)
+# Computes the Jacobian in row-order expansion of dE/dF, E=1/2(F^t * F - I)
 # \frac{\partial E_{ij}}{\partial F_{kl}} = \frac{1}{2}\left(F_{kj} \delta_{li} + F_{ki} \delta_{lj}\right)
 results = np.zeros(81,dtype=object)
 n = 0
