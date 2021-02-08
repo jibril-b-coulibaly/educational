@@ -1,15 +1,16 @@
-# Resolution of axisymmetric Heat equation in 1D using implicit (time) central (space) finite-differences
+# Resolution of the Heat equation in 1D using implicit (time) central (space) finite-differences
 # Heat equation: \rho c_p \frac {\partial T}{\partial t} - \nabla \cdot \left(k\nabla T\right) = q
-# Heat equation axisymmetric 1D : \rho c_p \frac{dT}{dt} - k \left(\frac{1}{r}\frac{dT}{dr} + \frac{d^2T}{dr^2}\right) = q
-# Discretized heat equation axisymmetric 1D: \rho c_p (T_{r,t+1}-T_{r,t})/dt - k/r (T_{r+1,t+1}-T_{r-1,t+1})/(2h) - k (T_{r+1,t+1}-2T_{r,t+1}+T_{r-1,t+1})/(h^2) - q_{r,t+1} = 0
+# Heat equation 1D : \rho c_p \frac{dT}{dt} - k \frac{d^2T}{dx^2} = q
+# Discretized heat equation axisymmetric 1D: \rho c_p (T_{x,t+1}-T_{x,t})/dt - k (T_{x+1,t+1}-2T_{x,t+1}+T_{x-1,t+1})/(h^2) - q_{x,t+1} = 0
 # SI units: All inputs and outputs !!!
+# Dirichlet Boundary conditions
 
 # TODO: Solution with boundary temperatures
 
 # Executable script  with the following command line arguments:
-# radius rho cp k n nstep dt BC1type BC1form BC1arg1 BC1arg2 ... BC2type BC2form BC2arg1 BC2arg2 ...
+# length rho cp k n nstep dt BC1type BC1form BC1arg1 BC1arg2 ... BC2type BC2form BC2arg1 BC2arg2 ...
 
-# radius: Radius of the domain [0;R] [m]
+# length: Length of the domain [0;L] [m]
 # rho: density of material [kg/m^3]
 # cp: Specific heat capacity [J/(kg*K)]
 # k: Thermal conductivity [W/(m*K)]
@@ -23,8 +24,11 @@
 # BC2type: type of boundary condition at r=R, 'DIR' or 'NEU'
 # BC2form: form of Dirichlet boundary condition at r=R, "const" or "satexp". Absent for BC2type=='NEU'
 # BC2args: list of arguments for the Dirichlet boundary condition form at r=R, <TBC1>  for "const" or <tau2 Tini2 Tfin2> for "satexp". absent for BC2type=='NEU'
+# Qform: form of the volumetric heat source heat, 'const' or 'file', file reads 2 columns 'time' and 'source' and linearly interpolates
+# Qargs: list of arguments for the heat source, <q>  for "const" or <filename> for "file" (converted internally to the 2 colums for interpolation).
 
 
+# q in [W/m^3], [J/(s*m^3)]
 
 import sys
 import numpy as np
@@ -50,9 +54,29 @@ def BC_const(t, param):
 BC_dic = {"const" : BC_const,
           "satexp" : BC_satexp}
 
+# Functions for preset time-dependent source terms
+def q_const(t, param):
+    # Constant volumetric heat generation
+    # param = q0
+    q0 = float(param[0])
+    return q0
+
+def q_file(t, param):
+    # Linear interpolation of volumetric heat generation from 2-column file 
+    # param = time (array), source (array)
+    time = param[0]
+    source = param[1]
+    return np.interp(t,time,source)
+#def Q_file(t)
+    
+
+
+Q_dic = {"const" : q_const,
+          "file" : q_file}
+
 def main():
     # Material parameters
-    R = float(sys.argv[1]) # 0.5*0.075 # Radius, domain [0,R]
+    L = float(sys.argv[1]) # 0.5*0.075 # Length, domain [0,L]
     rho = float(sys.argv[2]) # 1800.0 # Density, assumed constant over space
     cp = float(sys.argv[3]) # 795.0 # Specific heat capacity, assumed constant over space
     k = float(sys.argv[4]) # 0.33 # Thermal conductivity, assumed constant over space
@@ -91,45 +115,46 @@ def main():
             iarg = iarg + 1
         else:
             raise ValueError('BC must be <DIR> or <NEU>')
+            
+    # Heat source
+    Qform = sys.argv[iarg] # Form of heat source: 'const' or 'file'
+    if (Qform == 'const'):
+        Qargs = [float(sys.argv[iarg+1])] # Imposed volumetric heat source
+        Qstr = "const_"+sys.argv[iarg+1]
+    elif (Qform == 'file'):
+        Qargs = [np.genfromtxt(sys.argv[iarg+1], delimiter=',',names=True)['time'],
+                 np.genfromtxt(sys.argv[iarg+1], delimiter=',',names=True)['source']]
+        Qstr = "file_"+sys.argv[iarg+1]
+    else:
+        raise ValueError('source must be <const> or <file>')
 
     # Discretization and variables
     scheme = 'implicit' # time-discretization scheme
     ni = n-2 # Number of interior discretization points, excluding boundary points
-    r = np.linspace(0,R,n) # radius variable
+    x = np.linspace(0,L,n) # radius variable
     time = np.linspace(0,nstep*dt,nsave) # time variable
-    h = R/(ni+1) # Discretization length
-    cr1 = k/(2*h)
-    cr2 = k/h**2
+    h = L/(ni+1) # Discretization length
+    cx = k/h**2
     ct = rho*cp/dt
-    q = np.zeros(ni) # volumetric heat source, assumed constant over time
+
 
     # Assembly of stiffness matrix (dimensions (ni,ni), interior points only) and flux vector
-    DL = -cr1/(ct*r[1:-1]) + cr2/ct # bottom diagonal, factor of left temperature T_{r-1}
-    DC = -2*cr2/ct*np.ones(ni) # central (main) diagonal, factor of center temperature T_{r}
-    DR = cr1/(ct*r[1:-1]) + cr2/ct # top diagonal, factor of right temperatur T_{r+1}
-    K = np.diag(DL[1:],k=-1) + np.diag(DC,k=0) + np.diag(DR[0:-1],k=1) # Assembled stiffness matrix
-    Q = q/ct; # Flux vector
+    E = (cx/ct)*np.ones(ni-1) # extra diagonal, factor of left and right temperature T_{x-1} T_{x+1}
+    D = (-2*cx/ct)*np.ones(ni) # central (main) diagonal, factor of center temperature T_{x}
+    K = np.diag(E,k=-1) + np.diag(D,k=0) + np.diag(E,k=1) # Assembled stiffness matrix    
 
     # Initial and Boundary Conditions
     temp = np.zeros(ni) # Initial temperature field at t=0
-    """
-    BCtype = ['NEU','DIR'] # Type of Boundary conditions, Dirichlet 'DIR' or Neumann 'NEU' at [r=0, r=R]
-    BCform = [0.0,BC_satexp] # Time-dependent Boundary Conditions functions wrappers at [r=0, r=R]. Only valid for Dirichlet
-    BCargs = [[0.0],[600, 0, 40]] # Parameters for the boundary condition function wrappers at [r=0, r=R]. Only valid for Dirichlet
 
-    BCtype = ['NEU','DIR'] # Type of Boundary conditions, Dirichlet 'DIR' or Neumann 'NEU' at [r=0, r=R]
-    BCform = [None,BC_satexp] # Time-dependent Boundary Conditions functions wrappers at [r=0, r=R]. Only valid for Dirichlet
-    BCargs = [[None],[600.0, 0.0, 10.0]] # Parameters for the boundary condition function wrappers at [r=0, r=R]. Only valid for Dirichlet
-    """
     # Time-dependent BC as contributions to flux vector Q
     Q_BC = np.zeros(ni)
     # Time-independent zero-flux Neumann conditions
     # 1st order zero-flux for simplicity, i.e. T_0 = T_1
     # Changes in the permanent stiffness matrix
     if (BCtype[0] == 'NEU'):
-        K[0,0] += DL[0]
+        K[0,0] += E[0]
     if (BCtype[1] == 'NEU'):
-        K[-1,-1] += DR[-1]
+        K[-1,-1] += E[-1]
         
     # Solve Heat equation
     nevery = nstep/nsave
@@ -138,45 +163,43 @@ def main():
     for t in range(nstep):
         if (t % nevery == 0):
             temp_save[t/nevery] = np.copy(temp)
-        # Time-dependent Dirichlet Boundary conditions at r=0
+        # Time-dependent volumetric heat source, assumed constant over space [W/m^3]
+        Q = Q_dic[Qform]((t+1)*dt,Qargs)*np.ones(ni)/ct # Flux vector
+        # Time-dependent Dirichlet Boundary conditions at x=0
         if (BCtype[0] == 'DIR'):
-            Q_BC[0] = DL[0]*BC_dic[BCform[0]]((t+1)*dt,BCargs[0]) # Implicit: imposed temperture at time (t+1)
-        # Time-dependent Dirichlet Boundary conditions at r=R
+            Q_BC[0] = E[0]*BC_dic[BCform[0]]((t+1)*dt,BCargs[0]) # Implicit: imposed temperture at time (t+1)
+        # Time-dependent Dirichlet Boundary conditions at x=L
         if (BCtype[1] == 'DIR'):
-            Q_BC[-1] = DR[-1]*BC_dic[BCform[1]]((t+1)*dt,BCargs[1]) # Implicit: imposed temperture at time (t+1)
+            Q_BC[-1] = E[-1]*BC_dic[BCform[1]]((t+1)*dt,BCargs[1]) # Implicit: imposed temperture at time (t+1)
         if (scheme == 'implicit'): #Implicit time integration: (1-K) T_tp1 = T_t + (Q+Q_BC)_tp1
             temp = LA.solve(np.identity(ni)-K,temp+Q+Q_BC)
         elif(scheme == 'explicit'): # Explicit time integration: T_tp1 = (1+K) T_t + (Q+Q_BC)_t
             raise ValueError('Explicit integration not implemented')
     
     
-    # Compute average temperature, integral on disc
+    # Compute average temperature, integral on line
     temp_ave = np.zeros(nsave)
     for t in range(nsave):
-        temp_ave[t] = 2.0/r[-2]**2*integrate.simps(temp_save[t]*r[1:-1],r[1:-1])
+        temp_ave[t] = np.mean(temp_save[t])#1.0/(x[-2]-x[1])*integrate.simps(temp_save[t],x[1:-1])
 
     # Output
-    fname = "heat1axisymfd_rho={:.0f}_cp={:.0f}_k={:.2f}_R={:.2e}_BC0={}_BCR={}.csv".format(rho, cp, k, R, BCstr[0], BCstr[1])
-    header = ['time','temp_out','temp_in','temp_ave']
+    fname = "heat1fd_rho={:.0f}_cp={:.0f}_k={:.2f}_L={:.2e}_BC0={}_BCR={}_Q={}.csv".format(rho, cp, k, L, BCstr[0], BCstr[1],Qstr)
+    header = ['time','temp_left','temp_center','temp_right','temp_ave']
     data = np.concatenate((time[:,np.newaxis],
-                           BCargs[1][2]*(1.0 - np.exp(-time/BCargs[1][0]))[:,np.newaxis],
                            temp_save[:,0][:,np.newaxis],
+                           temp_save[:,ni/2][:,np.newaxis],
+                           temp_save[:,-1][:,np.newaxis],
                            temp_ave[:,np.newaxis]),axis=1)
     np.savetxt(fname, data, header=",".join(header), delimiter=',')
     
  
     # draft/debug plot and output 
     """
-    fname = "heat_1D_axisymmetric.csv"
-    header = ['time','temp']
-    time2D = np.insert(time,0,-1)[:,np.newaxis] # fills corner zith -1. rows = radius, columns = time
-    data = np.concatenate((time2D,np.transpose(np.concatenate((r[1:-1,np.newaxis],np.transpose(temp_save)),axis=1))),axis=1)
-    np.savetxt(fname, data, header=",".join(header), delimiter=',')
     
     fig, ax = plt.subplots()
-    ax.plot(r[1:-1],temp_save[0])
-    ax.plot(r[1:-1],temp_save[nsave/2])
-    ax.plot(r[1:-1],temp_save[nsave-1])
+    ax.plot(x[1:-1],temp_save[0])
+    ax.plot(x[1:-1],temp_save[nsave/2])
+    ax.plot(x[1:-1],temp_save[nsave-1])
     
     fig, ax2 = plt.subplots()
     #ax2.plot(time,temp_save[:,0])
